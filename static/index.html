@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <script src="https://cdn.socket.io/4.5.1/socket.io.min.js"></script>
+    <style>
+        /* Basic styling for the chat interface */
+        body { font-family: Arial, sans-serif; }
+        .hidden { display: none; } /* Hides elements controlled by CSS */
+        .chat-box {
+            height: 400px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .message { margin: 5px 0; }
+        .system { color: blue; } /* System messages appear in blue */
+        .private { color: purple; } /* Private messages appear in purple */
+        #usersList {
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chat App</h1>
+
+    <!-- Login screen for user authentication -->
+    <div id="loginScreen">
+        <input type="text" id="usernameInput" placeholder="Enter your username">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Chat interface for sending and receiving messages -->
+    <div id="chatScreen" class="hidden">
+        <div class="chat-box" id="chatBox"></div>
+        <input type="text" id="messageInput" placeholder="Type your message">
+        <button onclick="sendMessage()">Send</button>
+
+        <!-- Section for sending private messages -->
+        <div id="privateMessage">
+            <h3>Send Private Message:</h3>
+            <input type="text" id="recipientInput" placeholder="Recipient username">
+            <input type="text" id="privateMessageInput" placeholder="Your private message">
+            <button onclick="sendPrivateMessage()">Send Private</button>
+        </div>
+
+        <!-- Section displaying connected users -->
+        <div id="usersList">
+            <h3>Connected Users:</h3>
+            <ul id="connectedUsers"></ul>
+        </div>
+    </div>
+
+    <script>
+        // Establish connection to the WebSocket server
+        const socket = io('http://127.0.0.1:5000');
+
+        /**
+         * Login function
+         * Sends the username to the server and switches to the chat screen.
+         */
+        function login() {
+            const username = document.getElementById('usernameInput').value;
+            if (!username) {
+                alert("Please enter a username.");
+                return;
+            }
+            socket.emit('login', { username }); // Send login event to the server
+            document.getElementById('loginScreen').classList.add('hidden'); // Hide login screen
+            document.getElementById('chatScreen').classList.remove('hidden'); // Show chat screen
+        }
+
+        /**
+         * Display received messages in the chat box.
+         * System messages are styled differently from user messages.
+         */
+        socket.on('message', (data) => {
+            const chatBox = document.getElementById('chatBox');
+            const messageElement = document.createElement('div');
+            messageElement.className = data.sender === 'System' ? 'message system' : 'message';
+            messageElement.textContent = `[${data.timestamp || ''}] ${data.sender}: ${data.message}`;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to the bottom
+        });
+
+        /**
+         * Display the list of connected users.
+         * Updates dynamically when users join or leave the chat.
+         */
+        socket.on('connected_users', (users) => {
+            const usersList = document.getElementById('connectedUsers');
+            usersList.innerHTML = ''; // Clear the current list
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.textContent = user;
+                usersList.appendChild(li);
+            });
+        });
+
+        /**
+         * Send a public message to the chat.
+         * Emits a 'message' event to the server.
+         */
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value;
+            if (!message) {
+                alert("Please enter a message.");
+                return;
+            }
+            socket.emit('message', { sender: 'User', message }); // Send message to the server
+            input.value = ''; // Clear input field
+        }
+
+        /**
+         * Send a private message to a specific user.
+         * Emits a 'private_message' event to the server.
+         */
+        function sendPrivateMessage() {
+            const recipient = document.getElementById('recipientInput').value;
+            const message = document.getElementById('privateMessageInput').value;
+
+            if (!recipient || !message) {
+                alert("Please enter a recipient and a message.");
+                return;
+            }
+
+            socket.emit('private_message', { recipient, message }); // Send private message
+            document.getElementById('privateMessageInput').value = ''; // Clear input field
+        }
+
+        /**
+         * Display private messages received from other users.
+         * Adds '(Private)' to the message to differentiate it.
+         */
+        socket.on('private_message', (data) => {
+            const chatBox = document.getElementById('chatBox');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message private';
+            messageElement.textContent = `[${data.timestamp || ''}] (Private) ${data.sender}: ${data.message}`;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll
+        });
+    </script>
+</body>
+</html>
